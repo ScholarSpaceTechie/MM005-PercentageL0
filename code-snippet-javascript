@@ -346,7 +346,6 @@
 
     // ---------- STATE ----------
     const TOTAL_QUESTIONS = 10;
-    const OPTIONS_COUNT = 8;
 
     let inProgress = false;
     let locked = false;
@@ -362,43 +361,60 @@
 
     let current = null;
 
-    // ---------- AUDIO ----------
-    let audioCtx = null;
-    function canUseAudio() {
-      return typeof window !== "undefined" && (window.AudioContext || window.webkitAudioContext);
+    // ---------- AUDIO (Option C – Media Library URLs; SAME AS MM001/MM002/MM003) ----------
+    const SFX = {
+      correct: "https://scholarspace.academy/wp-content/uploads/2026/01/Games-Correct1.mp3",
+      wrong: "https://scholarspace.academy/wp-content/uploads/2026/01/Games-Wrong1.mp3",
+      timeup: "https://scholarspace.academy/wp-content/uploads/2026/01/Games-Timeup1.mp3",
+    };
+
+    const sfxCorrect = new Audio(SFX.correct);
+    const sfxWrong = new Audio(SFX.wrong);
+    const sfxTimeUp = new Audio(SFX.timeup);
+
+    [sfxCorrect, sfxWrong, sfxTimeUp].forEach((a) => {
+      a.preload = "auto";
+      a.volume = 0.55;
+    });
+
+    // iPad/Safari: unlock audio on first user gesture
+    let audioUnlocked = false;
+    function unlockAudioOnce() {
+      if (audioUnlocked) return;
+      audioUnlocked = true;
+
+      [sfxCorrect, sfxWrong, sfxTimeUp].forEach((a) => {
+        try {
+          a.muted = true;
+          const p = a.play();
+          if (p && typeof p.then === "function") {
+            p.then(() => {
+              a.pause();
+              a.currentTime = 0;
+              a.muted = false;
+            }).catch(() => {
+              a.muted = false;
+            });
+          } else {
+            a.muted = false;
+          }
+        } catch (e) {}
+      });
     }
-    function beep(freq, dur, type = "sine", delay = 0, vol = 0.08) {
-      if (!canUseAudio()) return;
+    document.addEventListener("pointerdown", unlockAudioOnce, { once: true });
+    document.addEventListener("touchstart", unlockAudioOnce, { once: true });
+    document.addEventListener("click", unlockAudioOnce, { once: true });
+
+    function safePlay(audioEl) {
       try {
-        if (!audioCtx) {
-          const AC = window.AudioContext || window.webkitAudioContext;
-          audioCtx = new AC();
-        }
-        const start = audioCtx.currentTime + delay / 1000;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.value = freq;
-        gain.gain.value = vol;
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(start);
-        osc.stop(start + dur / 1000);
+        audioEl.currentTime = 0;
+        const p = audioEl.play();
+        if (p && typeof p.catch === "function") p.catch(() => {});
       } catch (e) {}
     }
-    function playCorrectSound() {
-      beep(660, 220, "sine", 0, 0.07);
-      beep(880, 240, "sine", 140, 0.07);
-      beep(1040, 280, "sine", 280, 0.06);
-    }
-    function playWrongSound() {
-      beep(260, 200, "triangle", 0, 0.07);
-      beep(200, 200, "triangle", 160, 0.06);
-    }
-    function playTimeUpSound() {
-      beep(520, 220, "sine", 0, 0.06);
-      beep(400, 260, "sine", 200, 0.06);
-    }
+    function playCorrectSound() { safePlay(sfxCorrect); }
+    function playWrongSound() { safePlay(sfxWrong); }
+    function playTimeUpSound() { safePlay(sfxTimeUp); }
 
     // ---------- CONFETTI ----------
     function shootPopperStream(originX, originY, side, totalCount) {
@@ -495,8 +511,8 @@
     function round2(n) { return Math.round(n * 100) / 100; }
 
     function updateScore() {
-      scoreEl.textContent = Score: ${score} / ${total};
-      streakEl.textContent = Streak: ${streak} 🔥;
+      scoreEl.textContent = `Score: ${score} / ${total}`;
+      streakEl.textContent = `Streak: ${streak} 🔥`;
     }
 
     function stopTimer() {
@@ -513,7 +529,7 @@
         return;
       }
 
-      timerEl.textContent = ⏱ ${timeLeft}s;
+      timerEl.textContent = `⏱ ${timeLeft}s`;
       timerId = setInterval(() => {
         timeLeft--;
         if (timeLeft <= 0) {
@@ -522,7 +538,7 @@
           stopTimer();
           timeUp();
         } else {
-          timerEl.textContent = ⏱ ${timeLeft}s;
+          timerEl.textContent = `⏱ ${timeLeft}s`;
         }
       }, 1000);
     }
@@ -549,11 +565,11 @@
         const card = document.createElement("div");
         card.className = "sf-option";
         card.dataset.correct = (i === correctIndex) ? "1" : "0";
-        card.innerHTML = 
+        card.innerHTML = `
           <div class="sf-letter">${letters[i] || "?"}</div>
           <div class="sf-formula">${opt.main}</div>
           <div class="sf-desc"></div>
-        ;
+        `;
         card.addEventListener("click", () => handlePick(card));
         optionsEl.appendChild(card);
       });
@@ -566,7 +582,7 @@
     function uniqueStrings(seedArr, correct) {
       const out = [];
       const seen = new Set([correct]);
-      seedArr.forEach(s => {
+      seedArr.forEach((s) => {
         if (!seen.has(s)) { seen.add(s); out.push(s); }
       });
       return out;
@@ -575,7 +591,7 @@
     // no giveaway labels at all
     function make8OptionsFromCorrect(correctMain, wrongMains) {
       const correctObj = { main: correctMain, sub: "" };
-      const wrongObjs = wrongMains.map(x => ({ main: x, sub: "" }));
+      const wrongObjs = wrongMains.map((x) => ({ main: x, sub: "" }));
 
       while (wrongObjs.length < 7) {
         wrongObjs.push({ main: wrongMains[wrongObjs.length % wrongMains.length], sub: "" });
@@ -583,71 +599,71 @@
 
       const tagged = [correctObj].concat(wrongObjs.slice(0, 7)).map((o, i) => ({ o, i }));
       const shuffled = shuffle(tagged);
-      const newCorrectIndex = shuffled.findIndex(x => x.i === 0);
+      const newCorrectIndex = shuffled.findIndex((x) => x.i === 0);
 
-      return { options: shuffled.map(x => x.o), correctIndex: newCorrectIndex };
+      return { options: shuffled.map((x) => x.o), correctIndex: newCorrectIndex };
     }
 
     // ---------- QUESTION GENERATORS ----------
     function genDiscount(mode) {
-      const base = mode === "hard" ? [48, 56, 72, 84, 96][randInt(0,4)] : [20, 30, 40, 50, 60][randInt(0,4)];
-      const p = mode === "easy" ? [10, 20, 25][randInt(0,2)] : [10, 15, 20, 25, 30][randInt(0,4)];
+      const base = mode === "hard" ? [48, 56, 72, 84, 96][randInt(0, 4)] : [20, 30, 40, 50, 60][randInt(0, 4)];
+      const p = mode === "easy" ? [10, 20, 25][randInt(0, 2)] : [10, 15, 20, 25, 30][randInt(0, 4)];
       const newPrice = round2(base * (1 - p / 100));
       const correct = fmtMoney(newPrice);
 
       const wrongSeeds = [
-        fmtMoney(round2(base - (p/100)*base + 1)),
-        fmtMoney(round2(base - (p/100)*base - 1)),
-        fmtMoney(round2(base * (1 - (p + 10)/100))),
+        fmtMoney(round2(base - (p / 100) * base + 1)),
+        fmtMoney(round2(base - (p / 100) * base - 1)),
+        fmtMoney(round2(base * (1 - (p + 10) / 100))),
         fmtMoney(round2(base - p)),
         fmtMoney(round2(base)),
         fmtMoney(round2(newPrice + 2)),
         fmtMoney(round2(Math.max(0, newPrice - 2))),
-        fmtMoney(round2(base * (1 - p/200))),
-        fmtMoney(round2(base * (1 - (Math.max(5, p - 5))/100))),
+        fmtMoney(round2(base * (1 - p / 200))),
+        fmtMoney(round2(base * (1 - (Math.max(5, p - 5)) / 100))),
       ];
       const wrong = uniqueStrings(wrongSeeds, correct).slice(0, 12);
       const built = make8OptionsFromCorrect(correct, wrong);
 
       return {
-        q: An item costs <b>${fmtMoney(base)}</b>. It is discounted by <b>${p}%</b>. What is the sale price?,
-        hint: ${p}% of ${base} = ${(p/100)*base}. Subtract from ${base}.,
+        q: `An item costs <b>${fmtMoney(base)}</b>. It is discounted by <b>${p}%</b>. What is the sale price?`,
+        hint: `${p}% of ${base} = ${(p / 100) * base}. Subtract from ${base}.`,
         options: built.options,
-        correctIndex: built.correctIndex
+        correctIndex: built.correctIndex,
       };
     }
 
     function genIncrease(mode) {
-      const base = mode === "hard" ? [55, 65, 75, 95, 110][randInt(0,4)] : [30, 40, 50, 60, 80][randInt(0,4)];
-      const p = mode === "easy" ? [10, 20, 25][randInt(0,2)] : [10, 15, 20, 25, 30][randInt(0,4)];
+      const base = mode === "hard" ? [55, 65, 75, 95, 110][randInt(0, 4)] : [30, 40, 50, 60, 80][randInt(0, 4)];
+      const p = mode === "easy" ? [10, 20, 25][randInt(0, 2)] : [10, 15, 20, 25, 30][randInt(0, 4)];
       const newPrice = round2(base * (1 + p / 100));
       const correct = fmtMoney(newPrice);
 
       const wrongSeeds = [
-        fmtMoney(round2(base + (p/100)*base + 1)),
-        fmtMoney(round2(base + (p/100)*base - 1)),
-        fmtMoney(round2(base * (1 + (p + 10)/100))),
+        fmtMoney(round2(base + (p / 100) * base + 1)),
+        fmtMoney(round2(base + (p / 100) * base - 1)),
+        fmtMoney(round2(base * (1 + (p + 10) / 100))),
         fmtMoney(round2(base + p)),
-        fmtMoney(round2(base * (1 + p/200))),
+        fmtMoney(round2(base * (1 + p / 200))),
         fmtMoney(round2(base)),
         fmtMoney(round2(newPrice + 2)),
         fmtMoney(round2(Math.max(0, newPrice - 2))),
-        fmtMoney(round2(base * (1 + (Math.max(5, p - 5))/100))),
+        fmtMoney(round2(base * (1 + (Math.max(5, p - 5)) / 100))),
       ];
       const wrong = uniqueStrings(wrongSeeds, correct).slice(0, 12);
       const built = make8OptionsFromCorrect(correct, wrong);
 
       return {
-        q: A price is <b>${fmtMoney(base)}</b>. It increases by <b>${p}%</b>. What is the new price?,
-        hint: ${p}% of ${base} then add to ${base}.,
+        q: `A price is <b>${fmtMoney(base)}</b>. It increases by <b>${p}%</b>. What is the new price?`,
+        hint: `${p}% of ${base} then add to ${base}.`,
         options: built.options,
-        correctIndex: built.correctIndex
+        correctIndex: built.correctIndex,
       };
     }
 
     function genReverse(mode) {
-      const p = mode === "easy" ? [20, 25][randInt(0,1)] : [10, 15, 20, 25, 30][randInt(0,4)];
-      const original = mode === "hard" ? [60, 75, 90, 120, 150][randInt(0,4)] : [30, 40, 50, 80, 100][randInt(0,4)];
+      const p = mode === "easy" ? [20, 25][randInt(0, 1)] : [10, 15, 20, 25, 30][randInt(0, 4)];
+      const original = mode === "hard" ? [60, 75, 90, 120, 150][randInt(0, 4)] : [30, 40, 50, 80, 100][randInt(0, 4)];
       const paid = round2(original * (1 - p / 100));
       const correct = fmtMoney(original);
 
@@ -655,21 +671,21 @@
         fmtMoney(paid),
         fmtMoney(round2(original + 10)),
         fmtMoney(round2(Math.max(0, original - 10))),
-        fmtMoney(round2(paid / (1 - (p+10)/100))),
-        fmtMoney(round2(paid / (1 - (p-5)/100))),
-        fmtMoney(round2(paid * (1 + p/100))),
+        fmtMoney(round2(paid / (1 - (p + 10) / 100))),
+        fmtMoney(round2(paid / (1 - (p - 5) / 100))),
+        fmtMoney(round2(paid * (1 + p / 100))),
         fmtMoney(round2(paid + p)),
-        fmtMoney(round2(original * (1 + p/100))),
-        fmtMoney(round2(original * (1 - p/100))),
+        fmtMoney(round2(original * (1 + p / 100))),
+        fmtMoney(round2(original * (1 - p / 100))),
       ];
       const wrong = uniqueStrings(wrongSeeds, correct).slice(0, 12);
       const built = make8OptionsFromCorrect(correct, wrong);
 
       return {
-        q: After a <b>${p}%</b> discount, the price is <b>${fmtMoney(paid)}</b>. What was the original price?,
-        hint: Paid = ${100 - p}% of original. Original = paid ÷ ${(100 - p)/100}.,
+        q: `After a <b>${p}%</b> discount, the price is <b>${fmtMoney(paid)}</b>. What was the original price?`,
+        hint: `Paid = ${100 - p}% of original. Original = paid ÷ ${(100 - p) / 100}.`,
         options: built.options,
-        correctIndex: built.correctIndex
+        correctIndex: built.correctIndex,
       };
     }
 
@@ -677,7 +693,7 @@
       const pListEasy = [10, 20, 25, 50];
       const pList = [5, 10, 12.5, 15, 20, 25, 30, 40, 50];
       const p = (mode === "easy" ? pListEasy : pList)[randInt(0, (mode === "easy" ? pListEasy.length : pList.length) - 1)];
-      const n = mode === "hard" ? [96, 84, 72, 120, 160, 180][randInt(0,5)] : [80, 60, 40, 100, 200, 120][randInt(0,5)];
+      const n = mode === "hard" ? [96, 84, 72, 120, 160, 180][randInt(0, 5)] : [80, 60, 40, 100, 200, 120][randInt(0, 5)];
 
       const ans = round2(n * (p / 100));
       const correct = String(ans);
@@ -685,9 +701,9 @@
       const wrongSeeds = [
         String(round2(ans + 2)),
         String(round2(Math.max(0, ans - 2))),
-        String(round2(n * ((p + 10)/100))),
-        String(round2(n * ((Math.max(1, p - 5))/100))),
-        String(round2(n / (p/100))),
+        String(round2(n * ((p + 10) / 100))),
+        String(round2(n * ((Math.max(1, p - 5)) / 100))),
+        String(round2(n / (p / 100))),
         String(n),
         String(p),
         String(round2(ans + 5)),
@@ -697,15 +713,15 @@
       const built = make8OptionsFromCorrect(correct, wrong);
 
       return {
-        q: What is <b>${p}%</b> of <b>${n}</b>?,
-        hint: ${p}% = ${p}/100. Multiply: ${n} × ${p}/100.,
+        q: `What is <b>${p}%</b> of <b>${n}</b>?`,
+        hint: `${p}% = ${p}/100. Multiply: ${n} × ${p}/100.`,
         options: built.options,
-        correctIndex: built.correctIndex
+        correctIndex: built.correctIndex,
       };
     }
 
     function genGST(mode) {
-      const base = mode === "hard" ? [68, 74, 88, 96, 112, 135][randInt(0,5)] : [50, 80, 100, 120, 150][randInt(0,4)];
+      const base = mode === "hard" ? [68, 74, 88, 96, 112, 135][randInt(0, 5)] : [50, 80, 100, 120, 150][randInt(0, 4)];
       const gst = 9;
       const totalBill = round2(base * (1 + gst / 100));
       const correct = fmtMoney(totalBill);
@@ -715,19 +731,19 @@
         fmtMoney(round2(base * 1.08)),
         fmtMoney(round2(base * 1.10)),
         fmtMoney(round2(base)),
-        fmtMoney(round2(base - (gst/100)*base)),
+        fmtMoney(round2(base - (gst / 100) * base)),
         fmtMoney(round2(totalBill + 2)),
         fmtMoney(round2(Math.max(0, totalBill - 2))),
-        fmtMoney(round2(base * (1 + (gst/200)))),
+        fmtMoney(round2(base * (1 + (gst / 200)))),
       ];
       const wrong = uniqueStrings(wrongSeeds, correct).slice(0, 12);
       const built = make8OptionsFromCorrect(correct, wrong);
 
       return {
-        q: A bill is <b>${fmtMoney(base)}</b>. GST is <b>${gst}%</b>. What is the total amount?,
-        hint: Total = 109% of ${base} = ${base} × 1.09.,
+        q: `A bill is <b>${fmtMoney(base)}</b>. GST is <b>${gst}%</b>. What is the total amount?`,
+        hint: `Total = 109% of ${base} = ${base} × 1.09.`,
         options: built.options,
-        correctIndex: built.correctIndex
+        correctIndex: built.correctIndex,
       };
     }
 
@@ -744,12 +760,12 @@
       // warm-up: topic user-controlled
       const topic = topicSel.value;
       const map = {
-        mixed:   [genDiscount, genIncrease, genReverse, genPercentOf, genGST],
-        discount:[genDiscount],
-        increase:[genIncrease],
+        mixed: [genDiscount, genIncrease, genReverse, genPercentOf, genGST],
+        discount: [genDiscount],
+        increase: [genIncrease],
         reverse: [genReverse],
-        of:      [genPercentOf],
-        gst:     [genGST],
+        of: [genPercentOf],
+        gst: [genGST],
       };
       const pool = map[topic] || map.mixed;
       const fn = pool[randInt(0, pool.length - 1)];
@@ -790,7 +806,7 @@
       modeSel.disabled = false;
       enforceTopicRules();
 
-      metaEl.textContent = Quiz finished (${TOTAL_QUESTIONS} questions);
+      metaEl.textContent = `Quiz finished (${TOTAL_QUESTIONS} questions)`;
       questionEl.textContent = "—";
       optionsEl.innerHTML = "";
       timerEl.textContent = isWarmup() ? "☕ Warm-Up (No Timer)" : "⏱ –";
@@ -798,7 +814,7 @@
 
       feedbackEl.textContent = isWarmup()
         ? "✅ Warm-Up complete! (No score recorded.)"
-        : ✅ Quiz complete! Final score: ${score} / ${total};
+        : `✅ Quiz complete! Final score: ${score} / ${total}`;
 
       nextBtn.textContent = "Restart Quiz ↻";
       nextBtn.disabled = false;
@@ -845,7 +861,7 @@
       optionsEl.innerHTML = "";
 
       qIndex++;
-      metaEl.textContent = Question ${qIndex} of ${TOTAL_QUESTIONS};
+      metaEl.textContent = `Question ${qIndex} of ${TOTAL_QUESTIONS}`;
 
       current = pickQuestion();
       questionEl.innerHTML = current.q;
